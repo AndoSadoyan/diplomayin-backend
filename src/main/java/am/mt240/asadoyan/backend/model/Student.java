@@ -3,10 +3,11 @@ package am.mt240.asadoyan.backend.model;
 
 import jakarta.validation.constraints.*;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
 
-
+@Document(collection = "students")
 public class Student {
     @Id
     private String id;
