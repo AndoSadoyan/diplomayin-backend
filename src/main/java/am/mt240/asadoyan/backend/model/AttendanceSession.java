@@ -2,7 +2,6 @@ package am.mt240.asadoyan.backend.model;
 
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
-import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -15,15 +14,14 @@ public class AttendanceSession {
     
     @NotEmpty
     private String studentId;
-    
     @NotEmpty
     private String roomId;
     
-    private String courseId;
+    @NotNull
+    private String courseScheduleId; // Required - attendance session must be for a scheduled class
     
     @NotNull
     private Instant entryTime;
-    
     @NotNull
     private Instant lastSeen;
     
@@ -73,12 +71,12 @@ public class AttendanceSession {
         this.roomId = roomId;
     }
 
-    public String getCourseId() {
-        return courseId;
+    public String getCourseScheduleId() {
+        return courseScheduleId;
     }
 
-    public void setCourseId(String courseId) {
-        this.courseId = courseId;
+    public void setCourseScheduleId(String courseScheduleId) {
+        this.courseScheduleId = courseScheduleId;
     }
 
     public Instant getEntryTime() {
