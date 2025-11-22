@@ -1,4 +1,4 @@
-package am.mt240.asadoyan.backend;
+package am.mt240.asadoyan.backend.util;
 
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.ConstraintViolationException;
