@@ -1,6 +1,8 @@
 package am.mt240.asadoyan.backend.service;
 
+import am.mt240.asadoyan.backend.model.CourseSchedule;
 import am.mt240.asadoyan.backend.model.Student;
+import am.mt240.asadoyan.backend.repo.CourseScheduleRepository;
 import am.mt240.asadoyan.backend.repo.StudentRepository;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -10,13 +12,20 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.DayOfWeek;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class StudentService {
 
     @Autowired
     private StudentRepository studentRepository;
+    @Autowired
+    private CourseScheduleRepository scheduleRepository;
     @Autowired
     private Validator validator;
 
@@ -73,18 +82,73 @@ public class StudentService {
         studentRepository.save(student);
     }
 
-    public Map<String, Float[]> getEmbeddings(String group) {
+    public Map<String, Float[]> getEmbeddings(String group, String roomId) {
         List<Student> students;
-        if (group == null)
-            students = studentRepository.findAllFaceEmbeddings();
-        else
+        
+        // If roomId is provided, filter by students who have class in that room RIGHT NOW
+        if (roomId != null) {
+            students = getStudentsWithCurrentClassInRoom(roomId);
+        } else if (group != null) {
             students = studentRepository.findAllFaceEmbeddingsByGroup(group);
+        } else {
+            students = studentRepository.findAllFaceEmbeddings();
+        }
 
         Map<String, Float[]> embeddingMap = new HashMap<>();
-        for(Student student : students)
-            embeddingMap.put(student.getId(), student.getFaceEmbedding());
+        for(Student student : students) {
+            if (student.getFaceEmbedding() != null) {
+                embeddingMap.put(student.getId(), student.getFaceEmbedding());
+            }
+        }
 
         return embeddingMap;
+    }
+
+    /**
+     * Get students who have a scheduled class in the given room at the current time
+     */
+    private List<Student> getStudentsWithCurrentClassInRoom(String roomId) {
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.systemDefault());
+        DayOfWeek currentDay = now.getDayOfWeek();
+        LocalTime currentTime = now.toLocalTime();
+
+        // Find schedules for this room at this time
+        List<CourseSchedule> activeSchedules = scheduleRepository.findAll().stream()
+                .filter(schedule -> 
+                    schedule.getRoomId().equals(roomId) &&
+                    schedule.getDayOfWeek() == currentDay &&
+                    !currentTime.isBefore(schedule.getClassPeriod().getStart()) &&
+                    !currentTime.isAfter(schedule.getClassPeriod().getEnd())
+                )
+                .collect(Collectors.toList());
+
+        if (activeSchedules.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // Get all students whose group matches any of the active schedules
+        Set<String> targetGroups = activeSchedules.stream()
+                .map(CourseSchedule::getGroupName)
+                .collect(Collectors.toSet());
+
+        List<Student> eligibleStudents = new ArrayList<>();
+        for (String groupName : targetGroups) {
+            List<Student> groupStudents = studentRepository.findAllFaceEmbeddingsByGroup(groupName);
+
+            for (Student student : groupStudents) {
+                boolean matchesAnySchedule = activeSchedules.stream()
+                        .anyMatch(schedule -> 
+                            schedule.getGroupName().equals(student.getGroup()) &&
+                            (schedule.getSubgroup() == null || schedule.getSubgroup().equals(student.getSubgroup()))
+                        );
+                
+                if (matchesAnySchedule && student.getFaceEmbedding() != null) {
+                    eligibleStudents.add(student);
+                }
+            }
+        }
+
+        return eligibleStudents;
     }
 
     private void validate(Student student) {
