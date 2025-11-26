@@ -41,8 +41,10 @@ public class StudentController {
     }
 
     @GetMapping("/embeddings")
-    public Map<String, Float[]> getEmbeddingsMap(@RequestParam(required = false) String group) {
-        return studentService.getEmbeddings(group);
+    public Map<String, Float[]> getEmbeddingsMap(
+            @RequestParam(required = false) String group,
+            @RequestParam(required = false) String roomId) {
+        return studentService.getEmbeddings(group, roomId);
     }
 
 }
