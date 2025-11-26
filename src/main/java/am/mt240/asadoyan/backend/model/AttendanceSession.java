@@ -18,7 +18,7 @@ public class AttendanceSession {
     private String roomId;
     
     @NotNull
-    private String courseScheduleId; // Required - attendance session must be for a scheduled class
+    private String courseScheduleId;
     
     @NotNull
     private Instant entryTime;
@@ -46,7 +46,6 @@ public class AttendanceSession {
         this.updatedAt = Instant.now();
     }
 
-    // Getters and Setters
     public String getId() {
         return id;
     }

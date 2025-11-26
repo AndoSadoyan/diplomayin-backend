@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @RestController
@@ -64,7 +65,6 @@ public class CourseController {
         return ResponseEntity.ok().build();
     }
 
-    // Get courses for a student based on their group
     @GetMapping("/student/{studentId}")
     public ResponseEntity<List<Course>> getStudentCourses(@PathVariable String studentId) {
         Student student = studentRepo.findById(studentId).orElse(null);
@@ -75,7 +75,7 @@ public class CourseController {
         // Find all schedules for this student's group
         List<CourseSchedule> schedules = scheduleRepo.findByGroupName(student.getGroup());
         
-        // Filter by subgroup (include schedules with null subgroup or matching subgroup)
+        // Filter by subgroup
         schedules = schedules.stream()
                 .filter(s -> s.getSubgroup() == null || s.getSubgroup().equals(student.getSubgroup()))
                 .toList();
@@ -89,13 +89,12 @@ public class CourseController {
         // Fetch courses
         List<Course> courses = courseIds.stream()
                 .map(id -> courseRepo.findById(id).orElse(null))
-                .filter(c -> c != null)
+                .filter(Objects::nonNull)
                 .toList();
         
         return ResponseEntity.ok(courses);
     }
 
-    // Schedule endpoints
     @PostMapping("/{courseId}/schedule")
     public ResponseEntity<CourseSchedule> addSchedule(
             @PathVariable String courseId,

@@ -17,17 +17,17 @@ public class CourseSchedule {
     @NotEmpty
     private String roomId;
     @NotEmpty
-    private String groupName; // e.g., "MT-240" - which group this schedule is for
-    private Integer subgroup; // null means all subgroups, or specific subgroup number
+    private String groupName;
+    private Integer subgroup;
     @NotEmpty
-    private String instructorName; // Instructor for this specific group/schedule
+    private String instructorName;
     @NotNull
     private DayOfWeek dayOfWeek;
     @NotNull
-    private ClassPeriod classPeriod; // 1st lesson, 2nd lesson, etc.
+    private ClassPeriod classPeriod;
 
     public enum ClassPeriod {
-        FIRST(LocalTime.of(9, 30), LocalTime.of(10, 50)),
+        FIRST(LocalTime.of(23, 30), LocalTime.of(23, 50)),
         SECOND(LocalTime.of(11, 0), LocalTime.of(12, 20)),
         THIRD(LocalTime.of(12, 50), LocalTime.of(14, 10)),
         FORTH(LocalTime.of(14, 20), LocalTime.of(15, 40)),
@@ -48,9 +48,17 @@ public class CourseSchedule {
         public LocalTime getEnd() {
             return end;
         }
+
+        public static ClassPeriod getCurrentPeriod() {
+            LocalTime now = LocalTime.now();
+            for(ClassPeriod period : values()) {
+                if(now.isAfter(period.start) && now.isBefore(period.end))
+                    return period;
+            }
+            return null;
+        }
     }
 
-    // Getters and Setters
     public String getId() {
         return id;
     }

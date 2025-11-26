@@ -6,7 +6,6 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDate;
-import java.time.LocalTime;
 
 @Document(collection = "daily_attendance_summary")
 public class DailyAttendanceSummary {
@@ -24,11 +23,11 @@ public class DailyAttendanceSummary {
     
     private AttendanceStatus status = AttendanceStatus.ABSENT;
     
-    private Boolean wasLate = false;  // Did student arrive late in any session?
+    private Boolean wasLate = false;
     
-    private Integer totalDurationSeconds = 0;  // Sum of all sessions for this day
+    private Integer totalDurationSeconds = 0;
     
-    private Integer expectedDurationSeconds = 0;  // Expected class duration
+    private Integer expectedDurationSeconds = 0;
     
     private String notes;
     
@@ -45,7 +44,6 @@ public class DailyAttendanceSummary {
         this.date = date;
     }
 
-    // Getters and Setters
     public String getId() {
         return id;
     }
@@ -117,10 +115,7 @@ public class DailyAttendanceSummary {
     public void setNotes(String notes) {
         this.notes = notes;
     }
-    
-    /**
-     * Calculate attendance percentage for this day
-     */
+
     public double getAttendancePercentage() {
         if (expectedDurationSeconds == 0) return 0.0;
         return (totalDurationSeconds * 100.0) / expectedDurationSeconds;

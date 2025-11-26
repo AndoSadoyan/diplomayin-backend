@@ -15,20 +15,19 @@ public class Course {
     private String name;
     
     @NotEmpty
-    private String code; // e.g., "DB-1", "DSA-1" (subject-yearLevel)
+    private String code;
     
     @NotEmpty
-    private String semester; // e.g., "Fall 2024", "Spring 2025"
+    private String semester;
     
     @NotNull
     @Positive
     private Integer year;
     
-    private Integer yearLevel; // 1, 2, 3, 4 - which year students take this course
+    private Integer yearLevel;
     
     private String description;
 
-    // Getters and Setters
     public String getId() {
         return id;
     }

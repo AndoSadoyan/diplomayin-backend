@@ -21,8 +21,6 @@ public class AttendanceController {
     @Autowired
     private AttendanceService attendanceService;
 
-    // === Monitoring Terminal APIs ===
-
     @PostMapping("/checkin")
     public ResponseEntity<CheckinResponse> checkin(@Valid @RequestBody CheckinRequest request) {
         CheckinResponse response = attendanceService.checkin(request);
@@ -40,8 +38,6 @@ public class AttendanceController {
         Long duration = attendanceService.checkout(request);
         return ResponseEntity.ok(duration);
     }
-
-    // === Frontend Dashboard APIs ===
 
     @GetMapping("/active/{roomId}")
     public ResponseEntity<List<ActivePresenceDTO>> getActivePresence(@PathVariable String roomId) {

@@ -6,6 +6,7 @@ import am.mt240.asadoyan.backend.repo.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import am.mt240.asadoyan.backend.model.CourseSchedule.ClassPeriod;
 
 import java.time.*;
 import java.util.*;
@@ -36,17 +37,17 @@ public class AttendanceService {
     public CheckinResponse checkin(CheckinRequest request) {
         Instant timestamp = Instant.ofEpochMilli(request.getTimestamp());
         ZonedDateTime zdt = timestamp.atZone(ZoneId.systemDefault());
+        ClassPeriod currentPeriod = ClassPeriod.getCurrentPeriod();
 
-        // Auto-detect course based on schedule
-        Optional<CourseSchedule> scheduleOpt = scheduleRepo.findByRoomAndDayAndTime(
+        Optional<CourseSchedule> scheduleOpt = scheduleRepo.findFirstByRoomIdAndDayOfWeekAndClassPeriod(
                 request.getRoomId(),
                 zdt.getDayOfWeek(),
-                zdt.toLocalTime()
+                currentPeriod
         );
 
         if (scheduleOpt.isEmpty()) {
             throw new RuntimeException("No class scheduled in room " + request.getRoomId() + 
-                " at " + zdt.toLocalTime() + " on " + zdt.getDayOfWeek());
+                " on " + currentPeriod + " period on " + zdt.getDayOfWeek());
         }
 
         CourseSchedule schedule = scheduleOpt.get();
@@ -100,10 +101,8 @@ public class AttendanceService {
         long durationSeconds = Duration.between(session.getEntryTime(), timestamp).getSeconds();
         session.setTotalDurationSeconds((int) durationSeconds);
 
-        // Update confidence score (simple average with new value)
         if (request.getConfidenceScore() != null && session.getAvgConfidenceScore() != null) {
             float currentAvg = session.getAvgConfidenceScore();
-            // Simple moving average: give 80% weight to current, 20% to new
             float newAvg = (currentAvg * 0.8f) + (request.getConfidenceScore() * 0.2f);
             session.setAvgConfidenceScore(newAvg);
         }
@@ -160,11 +159,7 @@ public class AttendanceService {
 
         LocalTime arrivalTime = entryZdt.toLocalTime();
         LocalTime graceEnd = schedule.getStartTime().plusMinutes(15);
-        boolean wasLateThisSession = arrivalTime.isAfter(graceEnd);
-
-        if (wasLateThisSession) {
-            summary.setWasLate(true);
-        }
+        summary.setWasLate(arrivalTime.isAfter(graceEnd));
 
         double attendancePercentage = summary.getAttendancePercentage();
 

@@ -41,7 +41,6 @@ public class SemesterAttendanceStats {
         this.lastUpdated = Instant.now();
     }
 
-    // Getters and Setters
     public String getId() {
         return id;
     }

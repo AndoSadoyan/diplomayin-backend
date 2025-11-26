@@ -11,13 +11,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import am.mt240.asadoyan.backend.model.CourseSchedule.ClassPeriod;
 
 import java.time.DayOfWeek;
-import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 public class StudentService {
@@ -84,8 +83,7 @@ public class StudentService {
 
     public Map<String, Float[]> getEmbeddings(String group, String roomId) {
         List<Student> students;
-        
-        // If roomId is provided, filter by students who have class in that room RIGHT NOW
+
         if (roomId != null) {
             students = getStudentsWithCurrentClassInRoom(roomId);
         } else if (group != null) {
@@ -104,50 +102,26 @@ public class StudentService {
         return embeddingMap;
     }
 
-    /**
-     * Get students who have a scheduled class in the given room at the current time
-     */
     private List<Student> getStudentsWithCurrentClassInRoom(String roomId) {
         ZonedDateTime now = ZonedDateTime.now(ZoneId.systemDefault());
         DayOfWeek currentDay = now.getDayOfWeek();
-        LocalTime currentTime = now.toLocalTime();
+        ClassPeriod currentPeriod = ClassPeriod.getCurrentPeriod();
 
-        // Find schedules for this room at this time
-        List<CourseSchedule> activeSchedules = scheduleRepository.findAll().stream()
-                .filter(schedule -> 
-                    schedule.getRoomId().equals(roomId) &&
-                    schedule.getDayOfWeek() == currentDay &&
-                    !currentTime.isBefore(schedule.getClassPeriod().getStart()) &&
-                    !currentTime.isAfter(schedule.getClassPeriod().getEnd())
-                )
-                .collect(Collectors.toList());
+        Optional<CourseSchedule> activeSchedule = scheduleRepository.findFirstByRoomIdAndDayOfWeekAndClassPeriod(
+                roomId, currentDay, currentPeriod);
 
-        if (activeSchedules.isEmpty()) {
+        if (activeSchedule.isEmpty()) {
             return Collections.emptyList();
         }
 
-        // Get all students whose group matches any of the active schedules
-        Set<String> targetGroups = activeSchedules.stream()
-                .map(CourseSchedule::getGroupName)
-                .collect(Collectors.toSet());
-
-        List<Student> eligibleStudents = new ArrayList<>();
-        for (String groupName : targetGroups) {
-            List<Student> groupStudents = studentRepository.findAllFaceEmbeddingsByGroup(groupName);
-
-            for (Student student : groupStudents) {
-                boolean matchesAnySchedule = activeSchedules.stream()
-                        .anyMatch(schedule -> 
-                            schedule.getGroupName().equals(student.getGroup()) &&
-                            (schedule.getSubgroup() == null || schedule.getSubgroup().equals(student.getSubgroup()))
-                        );
-                
-                if (matchesAnySchedule && student.getFaceEmbedding() != null) {
-                    eligibleStudents.add(student);
-                }
-            }
+        String targetGroup = activeSchedule.get().getGroupName();
+        Integer targetSubGroup = activeSchedule.get().getSubgroup();
+        List<Student> eligibleStudents = studentRepository.findAllFaceEmbeddingsByGroup(targetGroup);
+        if(targetSubGroup != null) {
+            return eligibleStudents.stream().
+                    filter(student -> student.getSubgroup().equals(targetSubGroup))
+                    .toList();
         }
-
         return eligibleStudents;
     }
 
