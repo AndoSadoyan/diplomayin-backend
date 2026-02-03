@@ -28,6 +28,10 @@ public class StudentService {
     @Autowired
     private Validator validator;
 
+    public List<Student> getAll() {
+        return studentRepository.findAll();
+    }
+
     public Student get(String id) {
         if (!studentRepository.existsById(id))
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No Student with id " + id);
