@@ -57,9 +57,15 @@ public class StudentService {
         return studentRepository.save(student);
     }
 
+    public void delete(String id) {
+        if (!studentRepository.existsById(id))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No Student with id " + id);
+        studentRepository.deleteById(id);
+    }
+
     public Student edit(String id, Student patched) {
-        if (!studentRepository.existsById(patched.getId()))
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No Student with id " + patched.getId());
+        if (!studentRepository.existsById(id))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No Student with id " + id);
 
         Student saved = studentRepository.findById(id).get();
 

@@ -27,7 +27,7 @@ public class CourseSchedule {
     private ClassPeriod classPeriod;
 
     public enum ClassPeriod {
-        FIRST(LocalTime.of(23, 30), LocalTime.of(23, 50)),
+        FIRST(LocalTime.of(0, 1), LocalTime.of(23, 59)),
         SECOND(LocalTime.of(11, 0), LocalTime.of(12, 20)),
         THIRD(LocalTime.of(12, 50), LocalTime.of(14, 10)),
         FORTH(LocalTime.of(14, 20), LocalTime.of(15, 40)),

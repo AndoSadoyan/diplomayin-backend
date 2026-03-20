@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("students")
+@RequestMapping("/students")
 public class StudentController {
 
     @Autowired
@@ -39,6 +39,11 @@ public class StudentController {
     @PatchMapping("/{id}")
     public Student editStudent(@PathVariable String id, @RequestBody Student patches) {
         return studentService.edit(id, patches);
+    }
+
+    @DeleteMapping("/{id}")
+    public void deleteStudent(@PathVariable String id) {
+        studentService.delete(id);
     }
 
     @PostMapping("/{id}/registerFace")

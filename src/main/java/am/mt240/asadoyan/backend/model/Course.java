@@ -1,8 +1,6 @@
 package am.mt240.asadoyan.backend.model;
 
 import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -19,13 +17,9 @@ public class Course {
     
     @NotEmpty
     private String semester;
-    
-    @NotNull
-    @Positive
-    private Integer year;
-    
-    private Integer yearLevel;
-    
+
+    private Integer studentYear;
+
     private String description;
 
     public String getId() {
@@ -52,28 +46,20 @@ public class Course {
         this.code = code;
     }
 
+    public Integer getStudentYear() {
+        return studentYear;
+    }
+
+    public void setStudentYear(Integer studentYear) {
+        this.studentYear = studentYear;
+    }
+
     public String getSemester() {
         return semester;
     }
 
     public void setSemester(String semester) {
         this.semester = semester;
-    }
-
-    public Integer getYear() {
-        return year;
-    }
-
-    public void setYear(Integer year) {
-        this.year = year;
-    }
-
-    public Integer getYearLevel() {
-        return yearLevel;
-    }
-
-    public void setYearLevel(Integer yearLevel) {
-        this.yearLevel = yearLevel;
     }
 
     public String getDescription() {
@@ -84,4 +70,3 @@ public class Course {
         this.description = description;
     }
 }
-

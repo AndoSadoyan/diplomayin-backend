@@ -9,6 +9,8 @@ import org.springframework.transaction.annotation.Transactional;
 import am.mt240.asadoyan.backend.model.CourseSchedule.ClassPeriod;
 
 import java.time.*;
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -179,9 +181,13 @@ public class AttendanceService {
 
     private void updateSemesterStats(String studentId, String courseId) {
         Course course = courseRepo.findById(courseId).orElseThrow();
-        String semester = course.getSemester();
+        String semester = course.getSemester() != null ? course.getSemester() : currentSemester();
 
-        long totalClasses = scheduleRepo.findByCourseId(courseId).size() * 15;
+        LocalDate semStart = semesterStart(semester);
+        LocalDate semEnd   = semesterEnd(semester);
+        long totalClasses = scheduleRepo.findByCourseId(courseId).stream()
+                .mapToLong(s -> countDayOccurrences(s.getDayOfWeek(), semStart, semEnd))
+                .sum();
 
         List<DailyAttendanceSummary> summaries = summaryRepo.findByStudentIdAndCourseId(studentId, courseId);
         long attendedClasses = summaries.stream()
@@ -316,6 +322,31 @@ public class AttendanceService {
         } else {
             return sessions;
         }
+    }
+
+    // FIRST semester: Sep 1 – Dec 30 | SECOND semester: Feb 1 – Jun 30
+    private static String currentSemester() {
+        int month = LocalDate.now().getMonthValue();
+        if (month >= 9 && month <= 12) return "FIRST";
+        if (month >= 2 && month <= 6)  return "SECOND";
+        return "FIRST";
+    }
+
+    private static LocalDate semesterStart(String semester) {
+        int year = LocalDate.now().getYear();
+        return "SECOND".equals(semester) ? LocalDate.of(year, 2, 1) : LocalDate.of(year, 9, 1);
+    }
+
+    private static LocalDate semesterEnd(String semester) {
+        int year = LocalDate.now().getYear();
+        return "SECOND".equals(semester) ? LocalDate.of(year, 6, 30) : LocalDate.of(year, 12, 30);
+    }
+
+    // Count how many times a given day-of-week falls within [start, end] inclusive
+    private static long countDayOccurrences(DayOfWeek day, LocalDate start, LocalDate end) {
+        LocalDate first = start.with(TemporalAdjusters.nextOrSame(day));
+        if (first.isAfter(end)) return 0;
+        return ChronoUnit.WEEKS.between(first, end) + 1;
     }
 }
 
