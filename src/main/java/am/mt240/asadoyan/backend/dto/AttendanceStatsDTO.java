@@ -3,6 +3,7 @@ package am.mt240.asadoyan.backend.dto;
 public class AttendanceStatsDTO {
     private String studentId;
     private String studentName;
+    private String courseId;
     private String courseCode;
     private String courseName;
     private Integer totalClasses;
@@ -24,6 +25,14 @@ public class AttendanceStatsDTO {
 
     public void setStudentName(String studentName) {
         this.studentName = studentName;
+    }
+
+    public String getCourseId() {
+        return courseId;
+    }
+
+    public void setCourseId(String courseId) {
+        this.courseId = courseId;
     }
 
     public String getCourseCode() {

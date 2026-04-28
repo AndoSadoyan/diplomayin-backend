@@ -155,13 +155,17 @@ public class AttendanceService {
         long expectedDuration = Duration.between(schedule.getStartTime(), schedule.getEndTime()).getSeconds();
         summary.setExpectedDurationSeconds((int) expectedDuration);
 
+        boolean isFirstSession = summary.getId() == null;
+
         summary.setTotalDurationSeconds(
                 summary.getTotalDurationSeconds() + session.getTotalDurationSeconds()
         );
 
-        LocalTime arrivalTime = entryZdt.toLocalTime();
-        LocalTime graceEnd = schedule.getStartTime().plusMinutes(15);
-        summary.setWasLate(arrivalTime.isAfter(graceEnd));
+        if (isFirstSession) {
+            LocalTime arrivalTime = entryZdt.toLocalTime();
+            LocalTime graceEnd = schedule.getStartTime().plusMinutes(15);
+            summary.setWasLate(arrivalTime.isAfter(graceEnd));
+        }
 
         double attendancePercentage = summary.getAttendancePercentage();
 
@@ -190,6 +194,9 @@ public class AttendanceService {
                 .sum();
 
         List<DailyAttendanceSummary> summaries = summaryRepo.findByStudentIdAndCourseId(studentId, courseId);
+        long excusedClasses = summaries.stream()
+                .filter(s -> s.getStatus() == DailyAttendanceSummary.AttendanceStatus.EXCUSED)
+                .count();
         long attendedClasses = summaries.stream()
                 .filter(s -> s.getStatus() == DailyAttendanceSummary.AttendanceStatus.PRESENT ||
                         s.getStatus() == DailyAttendanceSummary.AttendanceStatus.LATE)
@@ -198,13 +205,14 @@ public class AttendanceService {
                 .filter(s -> s.getStatus() == DailyAttendanceSummary.AttendanceStatus.LATE)
                 .count();
 
-        double percentage = totalClasses > 0 ? (attendedClasses * 100.0 / totalClasses) : 0.0;
+        long effectiveTotal = Math.max(0, totalClasses - excusedClasses);
+        double percentage = effectiveTotal > 0 ? (attendedClasses * 100.0 / effectiveTotal) : 0.0;
 
         SemesterAttendanceStats stats = statsRepo
                 .findByStudentIdAndCourseIdAndSemester(studentId, courseId, semester)
                 .orElse(new SemesterAttendanceStats(studentId, courseId, semester));
 
-        stats.setTotalClasses((int) totalClasses);
+        stats.setTotalClasses((int) effectiveTotal);
         stats.setAttendedClasses((int) attendedClasses);
         stats.setLateArrivals((int) lateArrivals);
         stats.setAttendancePercentage(percentage);
@@ -212,68 +220,118 @@ public class AttendanceService {
         statsRepo.save(stats);
     }
 
+    @Transactional
+    public void excuseCourse(String courseId, LocalDate date) {
+        List<CourseSchedule> schedules = scheduleRepo.findByCourseId(courseId).stream()
+                .filter(s -> s.getDayOfWeek() == date.getDayOfWeek())
+                .toList();
+
+        if (schedules.isEmpty()) throw new RuntimeException("No schedule for this course on " + date.getDayOfWeek());
+
+        for (CourseSchedule schedule : schedules) {
+            List<Student> students = studentRepo.findAllFaceEmbeddingsByGroup(schedule.getGroupName()).stream()
+                    .filter(s -> schedule.getSubgroup() == null || schedule.getSubgroup().equals(s.getSubgroup()))
+                    .toList();
+
+            for (Student student : students) {
+                DailyAttendanceSummary summary = summaryRepo
+                        .findByStudentIdAndCourseIdAndDate(student.getId(), courseId, date)
+                        .orElse(new DailyAttendanceSummary(student.getId(), courseId, date));
+                summary.setStatus(DailyAttendanceSummary.AttendanceStatus.EXCUSED);
+                summaryRepo.save(summary);
+                updateSemesterStats(student.getId(), courseId);
+            }
+        }
+    }
+
+    @Transactional
+    public void excuseStudent(String studentId, String courseId, LocalDate startDate, LocalDate endDate) {
+        List<DailyAttendanceSummary> toExcuse = summaryRepo.findByStudentIdAndCourseId(studentId, courseId)
+                .stream()
+                .filter(s -> !s.getDate().isBefore(startDate) && !s.getDate().isAfter(endDate))
+                .filter(s -> s.getStatus() == DailyAttendanceSummary.AttendanceStatus.ABSENT)
+                .toList();
+
+        toExcuse.forEach(s -> s.setStatus(DailyAttendanceSummary.AttendanceStatus.EXCUSED));
+        summaryRepo.saveAll(toExcuse);
+
+        if (!toExcuse.isEmpty()) updateSemesterStats(studentId, courseId);
+    }
+
     public List<ActivePresenceDTO> getActivePresence(String roomId) {
         List<AttendanceSession> activeSessions = sessionRepo.findByRoomIdAndStatus(
-                roomId,
-                AttendanceSession.SessionStatus.ACTIVE
-        );
-
-        return activeSessions.stream()
-                .map(this::convertToActivePresenceDTO)
-                .collect(Collectors.toList());
+                roomId, AttendanceSession.SessionStatus.ACTIVE);
+        return convertSessions(activeSessions);
     }
 
     public Map<String, List<ActivePresenceDTO>> getAllActivePresence() {
         List<AttendanceSession> activeSessions = sessionRepo.findByStatus(
-                AttendanceSession.SessionStatus.ACTIVE
-        );
+                AttendanceSession.SessionStatus.ACTIVE);
 
-        return activeSessions.stream()
-                .map(this::convertToActivePresenceDTO)
-                .collect(Collectors.groupingBy(dto -> {
-                    return activeSessions.stream()
-                            .filter(s -> s.getId().equals(dto.getSessionId()))
-                            .findFirst()
-                            .map(AttendanceSession::getRoomId)
-                            .orElse("Unknown");
-                }));
+        Map<String, String> sessionToRoom = activeSessions.stream()
+                .collect(Collectors.toMap(AttendanceSession::getId, AttendanceSession::getRoomId));
+
+        return convertSessions(activeSessions).stream()
+                .collect(Collectors.groupingBy(dto ->
+                        sessionToRoom.getOrDefault(dto.getSessionId(), "Unknown")));
     }
 
-    private ActivePresenceDTO convertToActivePresenceDTO(AttendanceSession session) {
+    private List<ActivePresenceDTO> convertSessions(List<AttendanceSession> sessions) {
+        if (sessions.isEmpty()) return Collections.emptyList();
+
+        Set<String> studentIds = sessions.stream().map(AttendanceSession::getStudentId).collect(Collectors.toSet());
+        Set<String> scheduleIds = sessions.stream().map(AttendanceSession::getCourseScheduleId).collect(Collectors.toSet());
+
+        Map<String, Student> students = new HashMap<>();
+        studentRepo.findAllById(studentIds).forEach(s -> students.put(s.getId(), s));
+
+        Map<String, CourseSchedule> schedules = new HashMap<>();
+        scheduleRepo.findAllById(scheduleIds).forEach(s -> schedules.put(s.getId(), s));
+
+        Set<String> courseIds = schedules.values().stream().map(CourseSchedule::getCourseId).collect(Collectors.toSet());
+        Map<String, Course> courses = new HashMap<>();
+        courseRepo.findAllById(courseIds).forEach(c -> courses.put(c.getId(), c));
+
+        return sessions.stream()
+                .map(session -> convertToActivePresenceDTO(session, students, schedules, courses))
+                .collect(Collectors.toList());
+    }
+
+    private ActivePresenceDTO convertToActivePresenceDTO(AttendanceSession session,
+            Map<String, Student> students, Map<String, CourseSchedule> schedules, Map<String, Course> courses) {
         ActivePresenceDTO dto = new ActivePresenceDTO();
         dto.setSessionId(session.getId());
         dto.setStudentId(session.getStudentId());
         dto.setEntryTime(session.getEntryTime().toEpochMilli());
         dto.setDurationSeconds((long) session.getTotalDurationSeconds());
 
-        studentRepo.findById(session.getStudentId()).ifPresent(student -> {
+        Student student = students.get(session.getStudentId());
+        if (student != null) {
             dto.setStudentName(student.getName() + " " + student.getSurname());
-        });
+        }
 
-        scheduleRepo.findById(session.getCourseScheduleId()).ifPresent(schedule -> {
-            courseRepo.findById(schedule.getCourseId()).ifPresent(course -> {
+        CourseSchedule schedule = schedules.get(session.getCourseScheduleId());
+        if (schedule != null) {
+            Course course = courses.get(schedule.getCourseId());
+            if (course != null) {
                 dto.setCourseId(course.getId());
                 dto.setCourseName(course.getName());
-            });
-        });
+            }
+        }
 
         return dto;
     }
 
     public List<AttendanceStatsDTO> getCourseStats(String courseId) {
-        List<SemesterAttendanceStats> statsList = statsRepo.findByCourseId(courseId);
+        return convertStatsToDTO(statsRepo.findByCourseId(courseId));
+    }
 
-        return statsList.stream()
-                .map(this::convertToAttendanceStatsDTO)
-                .collect(Collectors.toList());
+    public List<AttendanceStatsDTO> getAllCourseStats() {
+        return convertStatsToDTO(statsRepo.findAll());
     }
 
     public List<AttendanceStatsDTO> getStudentStats(String studentId) {
-        List<SemesterAttendanceStats> statsList = statsRepo.findByStudentId(studentId);
-
-        return statsList.stream()
-                .map(this::convertToAttendanceStatsDTO)
-                .collect(Collectors.toList());
+        return convertStatsToDTO(statsRepo.findByStudentId(studentId));
     }
 
     public DailyAttendanceSummary getStudentDailySummary(String studentId, String courseId, LocalDate date) {
@@ -281,24 +339,37 @@ public class AttendanceService {
                 .orElse(null);
     }
 
-    private AttendanceStatsDTO convertToAttendanceStatsDTO(SemesterAttendanceStats stats) {
-        AttendanceStatsDTO dto = new AttendanceStatsDTO();
-        dto.setStudentId(stats.getStudentId());
-        dto.setTotalClasses(stats.getTotalClasses());
-        dto.setAttendedClasses(stats.getAttendedClasses());
-        dto.setLateArrivals(stats.getLateArrivals());
-        dto.setAttendancePercentage(stats.getAttendancePercentage());
+    private List<AttendanceStatsDTO> convertStatsToDTO(List<SemesterAttendanceStats> statsList) {
+        if (statsList.isEmpty()) return Collections.emptyList();
 
-        studentRepo.findById(stats.getStudentId()).ifPresent(student -> {
-            dto.setStudentName(student.getName() + " " + student.getSurname());
-        });
+        Set<String> studentIds = statsList.stream().map(SemesterAttendanceStats::getStudentId).collect(Collectors.toSet());
+        Set<String> courseIds = statsList.stream().map(SemesterAttendanceStats::getCourseId).collect(Collectors.toSet());
 
-        courseRepo.findById(stats.getCourseId()).ifPresent(course -> {
-            dto.setCourseCode(course.getCode());
-            dto.setCourseName(course.getName());
-        });
+        Map<String, Student> students = new HashMap<>();
+        studentRepo.findAllById(studentIds).forEach(s -> students.put(s.getId(), s));
 
-        return dto;
+        Map<String, Course> courses = new HashMap<>();
+        courseRepo.findAllById(courseIds).forEach(c -> courses.put(c.getId(), c));
+
+        return statsList.stream().map(stats -> {
+            AttendanceStatsDTO dto = new AttendanceStatsDTO();
+            dto.setStudentId(stats.getStudentId());
+            dto.setTotalClasses(stats.getTotalClasses());
+            dto.setAttendedClasses(stats.getAttendedClasses());
+            dto.setLateArrivals(stats.getLateArrivals());
+            dto.setAttendancePercentage(stats.getAttendancePercentage());
+
+            Student student = students.get(stats.getStudentId());
+            if (student != null) dto.setStudentName(student.getName() + " " + student.getSurname());
+
+            Course course = courses.get(stats.getCourseId());
+            if (course != null) {
+                dto.setCourseId(course.getId());
+                dto.setCourseCode(course.getCode());
+                dto.setCourseName(course.getName());
+            }
+            return dto;
+        }).collect(Collectors.toList());
     }
 
     public List<DailyAttendanceSummary> getCourseAttendanceForDate(String courseId, LocalDate date) {
@@ -324,22 +395,28 @@ public class AttendanceService {
         }
     }
 
-    // FIRST semester: Sep 1 – Dec 30 | SECOND semester: Feb 1 – Jun 30
+    // Academic year starts in September: FIRST = Sep–Dec, SECOND = Feb–Jun of the following year
+    // e.g. Sep 2024–Jun 2025 → academicYear = 2024
+    private static int academicYear() {
+        LocalDate today = LocalDate.now();
+        return today.getMonthValue() >= 9 ? today.getYear() : today.getYear() - 1;
+    }
+
     private static String currentSemester() {
         int month = LocalDate.now().getMonthValue();
         if (month >= 9 && month <= 12) return "FIRST";
         if (month >= 2 && month <= 6)  return "SECOND";
-        return "FIRST";
+        return "SECOND";
     }
 
     private static LocalDate semesterStart(String semester) {
-        int year = LocalDate.now().getYear();
-        return "SECOND".equals(semester) ? LocalDate.of(year, 2, 1) : LocalDate.of(year, 9, 1);
+        int acYear = academicYear();
+        return "SECOND".equals(semester) ? LocalDate.of(acYear + 1, 2, 1) : LocalDate.of(acYear, 9, 1);
     }
 
     private static LocalDate semesterEnd(String semester) {
-        int year = LocalDate.now().getYear();
-        return "SECOND".equals(semester) ? LocalDate.of(year, 6, 30) : LocalDate.of(year, 12, 30);
+        int acYear = academicYear();
+        return "SECOND".equals(semester) ? LocalDate.of(acYear + 1, 6, 30) : LocalDate.of(acYear, 12, 30);
     }
 
     // Count how many times a given day-of-week falls within [start, end] inclusive

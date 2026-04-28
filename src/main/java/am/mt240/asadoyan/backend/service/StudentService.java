@@ -33,10 +33,8 @@ public class StudentService {
     }
 
     public Student get(String id) {
-        if (!studentRepository.existsById(id))
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No Student with id " + id);
-
-        return studentRepository.findById(id).get();
+        return studentRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No Student with id " + id));
     }
 
     public Student add(Student student) {
@@ -64,10 +62,8 @@ public class StudentService {
     }
 
     public Student edit(String id, Student patched) {
-        if (!studentRepository.existsById(id))
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No Student with id " + id);
-
-        Student saved = studentRepository.findById(id).get();
+        Student saved = studentRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No Student with id " + id));
 
         saved.setName(patched.getName() == null ? saved.getName() : patched.getName());
         saved.setSurname(patched.getSurname() == null ? saved.getSurname() : patched.getSurname());
@@ -83,10 +79,8 @@ public class StudentService {
     }
 
     public void addEmbedding(String id, Float[] embedding) {
-        if (!studentRepository.existsById(id))
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No Student with id " + id);
-
-        Student student = studentRepository.findById(id).get();
+        Student student = studentRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No Student with id " + id));
         student.setFaceEmbedding(embedding);
         studentRepository.save(student);
     }

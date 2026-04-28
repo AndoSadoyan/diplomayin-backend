@@ -109,6 +109,11 @@ public class CourseController {
         return ResponseEntity.ok(scheduleRepo.findByCourseId(courseId));
     }
 
+    @GetMapping("/schedules/all")
+    public ResponseEntity<List<CourseSchedule>> getAllSchedules() {
+        return ResponseEntity.ok(scheduleRepo.findAll());
+    }
+
     @DeleteMapping("/schedule/{scheduleId}")
     public ResponseEntity<Void> deleteSchedule(@PathVariable String scheduleId) {
         if (!scheduleRepo.existsById(scheduleId)) {

@@ -30,7 +30,7 @@ public class CourseSchedule {
         FIRST(LocalTime.of(0, 1), LocalTime.of(23, 59)),
         SECOND(LocalTime.of(11, 0), LocalTime.of(12, 20)),
         THIRD(LocalTime.of(12, 50), LocalTime.of(14, 10)),
-        FORTH(LocalTime.of(14, 20), LocalTime.of(15, 40)),
+        FOURTH(LocalTime.of(14, 20), LocalTime.of(15, 40)),
         FIFTH(LocalTime.of(15, 50), LocalTime.of(17, 10));
 
         private final LocalTime start;

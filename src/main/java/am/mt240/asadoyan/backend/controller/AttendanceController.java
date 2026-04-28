@@ -71,8 +71,30 @@ public class AttendanceController {
 
     @GetMapping("/course/{courseId}/stats")
     public ResponseEntity<List<AttendanceStatsDTO>> getCourseStats(@PathVariable String courseId) {
-        List<AttendanceStatsDTO> stats = attendanceService.getCourseStats(courseId);
-        return ResponseEntity.ok(stats);
+        return ResponseEntity.ok(attendanceService.getCourseStats(courseId));
+    }
+
+    @GetMapping("/stats/courses")
+    public ResponseEntity<List<AttendanceStatsDTO>> getAllCourseStats() {
+        return ResponseEntity.ok(attendanceService.getAllCourseStats());
+    }
+
+    @PostMapping("/course/{courseId}/excuse")
+    public ResponseEntity<Void> excuseCourse(
+            @PathVariable String courseId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        attendanceService.excuseCourse(courseId, date);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/student/{studentId}/excuse")
+    public ResponseEntity<Void> excuseStudent(
+            @PathVariable String studentId,
+            @RequestParam String courseId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        attendanceService.excuseStudent(studentId, courseId, startDate, endDate);
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/student/{studentId}/stats")

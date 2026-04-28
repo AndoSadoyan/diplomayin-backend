@@ -47,7 +47,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResponseStatusException.class)
     @ResponseBody
     public Map<String, Object> handleResponseStatus(ResponseStatusException ex, HttpServletResponse response) {
-        response.setStatus(HttpStatus.NOT_FOUND.value());
+        response.setStatus(ex.getStatusCode().value());
         Map<String, Object> body = new HashMap<>();
         body.put("status", ex.getStatusCode().value());
         body.put("error", ex.getReason());
